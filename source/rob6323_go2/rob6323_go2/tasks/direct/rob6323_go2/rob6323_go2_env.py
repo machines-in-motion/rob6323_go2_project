@@ -51,7 +51,9 @@ class Rob6323Go2Env(DirectRLEnv):
                 "orient", # Part 5.2
                 "lin_vel_z",
                 "dof_vel",
-                "ang_vel_xy"
+                "ang_vel_xy",
+                "foot_clearance", # Part 6.3
+                "contact_forces"
             ]
         }
 
@@ -87,6 +89,11 @@ class Rob6323Go2Env(DirectRLEnv):
         self.clock_inputs = torch.zeros(self.num_envs, 4, dtype=torch.float, device=self.device, requires_grad=False)
         self.desired_contact_states = torch.zeros(self.num_envs, 4, dtype=torch.float, device=self.device, requires_grad=False)
 
+        # Part 6.2
+        self._feet_ids_sensor = []
+        for name in foot_names:
+            id_list, _ = self._contact_sensor.find_bodies(name)
+            self._feet_ids_sensor.append(id_list[0])
 
 
     def _setup_scene(self):
@@ -107,12 +114,13 @@ class Rob6323Go2Env(DirectRLEnv):
         light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
 
-    def _pre_physics_step(self, actions: torch.Tensor) -> None:
-        self._actions = actions.clone()
-        self._processed_actions = self.cfg.action_scale * self._actions + self.robot.data.default_joint_pos
+    # COMMENTED: built-in PD controller not used
+    # def _pre_physics_step(self, actions: torch.Tensor) -> None:
+    #     self._actions = actions.clone()
+    #     self._processed_actions = self.cfg.action_scale * self._actions + self.robot.data.default_joint_pos
 
-    def _apply_action(self) -> None:
-        self.robot.set_joint_position_target(self._processed_actions)
+    # def _apply_action(self) -> None:
+    #     self.robot.set_joint_position_target(self._processed_actions)
 
     def _get_observations(self) -> dict:
         self._previous_actions = self._actions.clone()
@@ -178,6 +186,13 @@ class Rob6323Go2Env(DirectRLEnv):
         ang_vel_y = self.robot.data.root_ang_vel_b[:, 1]
         rew_ang_vel_xy = torch.square(ang_vel_x) + torch.square(ang_vel_y)
 
+        # Part 6.3
+        # Foot clearance
+        rew_foot_clearance = self._reward_foot_clearance()
+        # Contact forces 
+        # Get the magnitude of contact forces per foot, then add the feet magnitudes together per env
+        magnitudes = torch.norm(self._contact_forces(), dim=-1)
+        rew_contact_forces = torch.sum(magnitudes, dim=-1)
         
         rewards = {
             "track_lin_vel_xy_exp": lin_vel_error_mapped * self.cfg.lin_vel_reward_scale,
@@ -188,6 +203,8 @@ class Rob6323Go2Env(DirectRLEnv):
             "lin_vel_z": rew_lin_vel_z * self.cfg.lin_vel_z_reward_scale,
             "dof_vel": rew_dof_vel * self.cfg.dof_vel_reward_scale,
             "ang_vel_xy": rew_ang_vel_xy * self.cfg.ang_vel_xy_reward_scale,
+            "foot_clearance": rew_foot_clearance * self.cfg.feet_clearance_reward_scale, # Part 6.3
+            "contact_forces": rew_contact_forces * self.cfg.tracking_contacts_shaped_force_reward_scale
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
         # Logging
@@ -432,3 +449,39 @@ class Rob6323Go2Env(DirectRLEnv):
         reward = torch.sum(torch.square(err_raibert_heuristic), dim=(1, 2))
 
         return reward
+
+# Part 6.3
+    # Get foot height
+    @property
+    def _foot_height(self):
+        foot_positions_w = self.foot_positions_w
+        heights = foot_positions_w[:, :, 2] # get the third coord (z)
+        return heights
+
+    # Get reward based on distance from desired foot heights
+    def _reward_foot_clearance(self):
+
+        durations = 0.5
+        foot_heights = self._foot_height
+    
+        # store desired foot clearance depending on phase
+        # lower limb length is reported to be 21 cm (0.21 m)
+        peak = 0.05
+
+        foot_clearance_indices = self.foot_indices.clone()
+        for idxs in foot_clearance_indices:
+            # use the indices after they're set up in the _step_contact_targets
+            stance_idxs = idxs < durations
+            swing_idxs = idxs > durations
+            # want the middle of the swing phase to be the peak height (0.21 m)
+            idxs[stance_idxs] = 0.0
+            # idxs[swing_idxs] = peak*torch.sin(2*np.pi*(idxs[swing_idxs]-durations))
+            idxs[swing_idxs] = peak
+
+        reward = torch.sum(torch.square(foot_heights-foot_clearance_indices), dim=1)
+
+        return reward
+
+    # Get contact force on feet
+    def _contact_forces(self):
+        return self._contact_sensor.data.net_forces_w[:, self._feet_ids_sensor]
