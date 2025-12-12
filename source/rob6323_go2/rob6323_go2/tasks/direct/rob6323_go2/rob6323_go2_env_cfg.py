@@ -45,7 +45,7 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     torque_limits = 100.0
 
     # Early termination based on base height
-    base_height_min = 0.20
+    base_height_min = 0.05
 
     # ------------------------------------------------------------------
     # Simulation & terrain
