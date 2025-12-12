@@ -1,4 +1,5 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers
+# (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -15,24 +16,30 @@ from isaaclab.utils import configclass
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.sensors import ContactSensorCfg
 from isaaclab.markers import VisualizationMarkersCfg
-from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, FRAME_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG
+from isaaclab.markers.config import (
+    BLUE_ARROW_X_MARKER_CFG,
+    FRAME_MARKER_CFG,
+    GREEN_ARROW_X_MARKER_CFG,
+)
 from isaaclab.actuators import ImplicitActuatorCfg
 
 
 @configclass
 class Rob6323Go2EnvCfg(DirectRLEnvCfg):
-    # env
+    # ------------------------------------------------------------------
+    # Environment & spaces
+    # ------------------------------------------------------------------
     decimation = 4
     episode_length_s = 20.0
-    # - spaces definition
+
     action_scale = 0.25
     action_space = 12
-    # 48 original obs + 4 clock inputs for gait phases
+    # 48 original obs + 4 clock inputs for gait phase signals
     observation_space = 48 + 4
     state_space = 0
     debug_vis = True
 
-    # PD controller gains
+    # PD controller gains (used in manual torque control)
     Kp = 20.0
     Kd = 0.5
     torque_limits = 100.0
@@ -40,7 +47,9 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     # Early termination based on base height
     base_height_min = 0.20
 
-    # simulation
+    # ------------------------------------------------------------------
+    # Simulation & terrain
+    # ------------------------------------------------------------------
     sim: SimulationCfg = SimulationCfg(
         dt=1 / 200,
         render_interval=decimation,
@@ -52,6 +61,7 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
             restitution=0.0,
         ),
     )
+
     terrain = TerrainImporterCfg(
         prim_path="/World/ground",
         terrain_type="plane",
@@ -66,34 +76,55 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
         debug_vis=False,
     )
 
-    # robot(s)
-    robot_cfg: ArticulationCfg = UNITREE_GO2_CFG.replace(prim_path="/World/envs/env_.*/Robot")
-    # Disable built-in PD and group leg joints under a custom actuator
+    # ------------------------------------------------------------------
+    # Robot
+    # ------------------------------------------------------------------
+    robot_cfg: ArticulationCfg = UNITREE_GO2_CFG.replace(
+        prim_path="/World/envs/env_.*/Robot"
+    )
+
+    # Disable built‑in PD and group leg joints under a custom actuator
     robot_cfg.actuators["base_legs"] = ImplicitActuatorCfg(
-        joint_names_expr=[".*_hip_joint", ".*_thigh_joint", ".*_calf_joint"],
+        joint_names_expr=[
+            ".*_hip_joint",
+            ".*_thigh_joint",
+            ".*_calf_joint",
+        ],
         effort_limit=23.5,
         velocity_limit=30.0,
-        stiffness=0.0,  # disable implicit P-gain
-        damping=0.0,    # disable implicit D-gain
+        stiffness=0.0,  # disable implicit P‑gain
+        damping=0.0,    # disable implicit D‑gain
     )
 
-    # scene
-    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=4.0, replicate_physics=True)
+    # ------------------------------------------------------------------
+    # Scene & sensors
+    # ------------------------------------------------------------------
+    scene: InteractiveSceneCfg = InteractiveSceneCfg(
+        num_envs=4096, env_spacing=4.0, replicate_physics=True
+    )
+
     contact_sensor: ContactSensorCfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot/.*", history_length=3, update_period=0.005, track_air_time=True
+        prim_path="/World/envs/env_.*/Robot/.*",
+        history_length=3,
+        update_period=0.005,
+        track_air_time=True,
     )
 
-    goal_vel_visualizer_cfg: VisualizationMarkersCfg = GREEN_ARROW_X_MARKER_CFG.replace(
-        prim_path="/Visuals/Command/velocity_goal"
+    goal_vel_visualizer_cfg: VisualizationMarkersCfg = (
+        GREEN_ARROW_X_MARKER_CFG.replace(
+            prim_path="/Visuals/Command/velocity_goal"
+        )
     )
-    """The configuration for the goal velocity visualization marker. Defaults to GREEN_ARROW_X_MARKER_CFG."""
+    """Configuration for the goal velocity visualization marker."""
 
-    current_vel_visualizer_cfg: VisualizationMarkersCfg = BLUE_ARROW_X_MARKER_CFG.replace(
-        prim_path="/Visuals/Command/velocity_current"
+    current_vel_visualizer_cfg: VisualizationMarkersCfg = (
+        BLUE_ARROW_X_MARKER_CFG.replace(
+            prim_path="/Visuals/Command/velocity_current"
+        )
     )
-    """The configuration for the current velocity visualization marker. Defaults to BLUE_ARROW_X_MARKER_CFG."""
+    """Configuration for the current velocity visualization marker."""
 
-    # Set the scale of the visualization markers to (0.5, 0.5, 0.5)
+    # shrink marker size a bit
     goal_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
     current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
 
@@ -101,34 +132,23 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     # Reward scales
     # ------------------------------------------------------------------
     # Command tracking
-    lin_vel_reward_scale = 1.0            # tracks vx, vy
-    yaw_rate_reward_scale = 0.5           # tracks yaw rate
+    lin_vel_reward_scale = 1.0            # vx, vy tracking
+    yaw_rate_reward_scale = 0.5           # yaw‑rate tracking
 
     # Action regularization / smoothness
-    action_rate_reward_scale = -0.01      # penalizes jerky changes in actions
+    action_rate_reward_scale = -0.01      # penalize jerk in actions
     torque_l2_reward_scale = -1e-4        # tiny penalty on ||tau||^2
 
-    # Gait quality and feet
+    # Gait quality & feet
     raibert_heuristic_reward_scale = -10.0
     feet_clearance_reward_scale = -30.0
     tracking_contacts_shaped_force_reward_scale = 4.0
-    foot_slip_reward_scale = -0.1         # penalize horizontal slip when foot is in contact
 
-    # Collisions
-    knee_collision_reward_scale = -0.01   # penalize thigh/knee impacts
-
-    # Base stability, attitude, and height
+    # Base stability, attitude and height shaping
     orient_reward_scale = -5.0
     lin_vel_z_reward_scale = -0.02
     dof_vel_reward_scale = -0.0001
     ang_vel_xy_reward_scale = -0.001
 
-    # ------------------------------------------------------------------
-    # Domain randomization
-    # ------------------------------------------------------------------
-    # max roll / pitch tilt at reset [rad]
-    init_base_tilt_range = 0.15
-    # scale for initial base linear velocity "push" at reset [m/s]
-    init_base_linvel_scale = 0.5
-    # std dev for joint position noise at reset [rad]
-    init_joint_noise_std = 0.05
+    # Explicit knee/hip collision penalty
+    knee_collision_reward_scale = -0.02
