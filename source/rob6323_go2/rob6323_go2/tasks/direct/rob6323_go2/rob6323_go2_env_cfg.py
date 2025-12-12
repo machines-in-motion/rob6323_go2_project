@@ -25,6 +25,8 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     # - spaces definition
     action_scale = 0.25
     action_space = 12
+    # reward scales
+    action_rate_reward_scale = -0.1
     observation_space = 48
     state_space = 0
     debug_vis = True

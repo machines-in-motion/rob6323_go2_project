@@ -43,7 +43,9 @@ class Rob6323Go2Env(DirectRLEnv):
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
             for key in [
                 "track_lin_vel_xy_exp",
-                "track_ang_vel_z_exp"
+                "track_ang_vel_z_exp",
+                "rew_action_rate",     # <--- Added
+                "raibert_heuristic"    # <--- Added
             ]
         }
         # Get specific body indices
@@ -52,6 +54,9 @@ class Rob6323Go2Env(DirectRLEnv):
         # self._undesired_contact_body_ids, _ = self._contact_sensor.find_bodies(".*thigh")
 
         # add handle for debug visualization (this is set to a valid handle inside set_debug_vis)
+        # variables needed for action rate penalization
+        # Shape: (num_envs, action_dim, history_length)
+        self.last_actions = torch.zeros(self.num_envs, gym.spaces.flatdim(self.single_action_space), 3, dtype=torch.float, device=self.device, requires_grad=False)
         self.set_debug_vis(self.cfg.debug_vis)
 
     def _setup_scene(self):
@@ -113,6 +118,22 @@ class Rob6323Go2Env(DirectRLEnv):
             "track_ang_vel_z_exp": yaw_rate_error_mapped * self.cfg.yaw_rate_reward_scale * self.step_dt,
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
+        # action rate penalization
+        # First derivative (Current - Last)
+        rew_action_rate = torch.sum(torch.square(self._actions - self.last_actions[:, :, 0]), dim=1) * (self.cfg.action_scale ** 2)
+        # Second derivative (Current - 2*Last + 2ndLast)
+        rew_action_rate += torch.sum(torch.square(self._actions - 2 * self.last_actions[:, :, 0] + self.last_actions[:, :, 1]), dim=1) * (self.cfg.action_scale ** 2)
+
+        # Update the prev action hist (roll buffer and insert new action)
+        self.last_actions = torch.roll(self.last_actions, 1, 2)
+        self.last_actions[:, :, 0] = self._actions[:]
+
+        # Add to rewards dict
+        rewards = {
+            "track_lin_vel_xy_exp": lin_vel_error_mapped * self.cfg.lin_vel_reward_scale, # Removed step_dt
+            "track_ang_vel_z_exp": yaw_rate_error_mapped * self.cfg.yaw_rate_reward_scale, # Removed step_dt
+            "rew_action_rate": rew_action_rate * self.cfg.action_rate_reward_scale,
+        }
         # Logging
         for key, value in rewards.items():
             self._episode_sums[key] += value
@@ -158,6 +179,8 @@ class Rob6323Go2Env(DirectRLEnv):
         extras["Episode_Termination/base_contact"] = torch.count_nonzero(self.reset_terminated[env_ids]).item()
         extras["Episode_Termination/time_out"] = torch.count_nonzero(self.reset_time_outs[env_ids]).item()
         self.extras["log"].update(extras)
+        # Reset last actions hist
+        self.last_actions[env_ids] = 0.
 
     def _set_debug_vis_impl(self, debug_vis: bool):
         # set visibility of markers
