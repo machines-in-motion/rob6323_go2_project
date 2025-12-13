@@ -29,7 +29,7 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     action_scale = 0.25
     action_space = 12
     # reward scales
-    action_rate_reward_scale = -0.1
+    action_rate_reward_scale = -0.01
     observation_space = 48
     state_space = 0
     debug_vis = True
@@ -45,19 +45,18 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     #part 4
     observation_space = 48 + 4  # Added 4 for clock inputs
 
-    raibert_heuristic_reward_scale = -10.0
-    feet_clearance_reward_scale = -30.0
+    raibert_heuristic_reward_scale = -1.0
+    feet_clearance_reward_scale = -1.0
     tracking_contacts_shaped_force_reward_scale = 4.0
     
     #part 5
     # Additional reward scales
-    orient_reward_scale = -5.0
+    orient_reward_scale = -1.0
     lin_vel_z_reward_scale = -0.02
     dof_vel_reward_scale = -0.0001
     ang_vel_xy_reward_scale = -0.001
     
     #part6
-    feet_clearance_reward_scale = -30.0
     tracking_contacts_shaped_force_reward_scale = 4.0
 
     # simulation
@@ -111,8 +110,8 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
 
     # reward scales
-    lin_vel_reward_scale = 1.0
-    yaw_rate_reward_scale = 0.5
+    lin_vel_reward_scale = 2.0
+    yaw_rate_reward_scale = 1.0
     
     # "base_legs" is an arbitrary key we use to group these actuators
     #why are we disabling implicit P and D gains? 
