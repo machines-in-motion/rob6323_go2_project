@@ -95,18 +95,13 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     # reward scales
     lin_vel_reward_scale = 1.0
     yaw_rate_reward_scale = 0.5
-    # Part 1.1
-    action_rate_reward_scale = -0.1
-    # Part 3.1
-    base_height_min = 0.20  # Terminate if base is lower than 20cm
-    # Part 4.1
-    raibert_heuristic_reward_scale = -10.0
-    # Part 5.1
-    # Additional reward scales
-    orient_reward_scale = -5.0
+    action_rate_reward_scale = -0.1 # Part 1.1
+    base_height_min = 0.05  # Part 3.1 -- Terminate if base is lower than 5 cm
+    raibert_heuristic_reward_scale = -10.0 # Part 4.1
+    orient_reward_scale = -5.0 # Part 5.1 -- Additional reward scales
     lin_vel_z_reward_scale = -0.02
     dof_vel_reward_scale = -0.0001
     ang_vel_xy_reward_scale = -0.001
-    # Part 6.1
-    feet_clearance_reward_scale = -30.0
+    feet_clearance_reward_scale = -30.0 # Part 6.1
     tracking_contacts_shaped_force_reward_scale = 4.0
+    torque__magnitude_reward_scale = -0.00005

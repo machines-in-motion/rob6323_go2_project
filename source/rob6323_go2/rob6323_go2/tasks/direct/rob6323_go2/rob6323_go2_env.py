@@ -52,8 +52,9 @@ class Rob6323Go2Env(DirectRLEnv):
                 "lin_vel_z",
                 "dof_vel",
                 "ang_vel_xy",
-                "foot_clearance", # Part 6.3
-                "contact_forces"
+                "feet_clearance", # Part 6.3
+                "tracking_contacts_shaped_force",
+                "torque_magnitude"
             ]
         }
 
@@ -89,16 +90,18 @@ class Rob6323Go2Env(DirectRLEnv):
         self.clock_inputs = torch.zeros(self.num_envs, 4, dtype=torch.float, device=self.device, requires_grad=False)
         self.desired_contact_states = torch.zeros(self.num_envs, 4, dtype=torch.float, device=self.device, requires_grad=False)
 
-        # Part 6.2
+        # Part 6.2 - sensor id for feet contact sensing
         self._feet_ids_sensor = []
         for name in foot_names:
             id_list, _ = self._contact_sensor.find_bodies(name)
             self._feet_ids_sensor.append(id_list[0])
 
+        self._torques = torch.zeros(self.num_envs, gym.spaces.flatdim(self.single_action_space)) # store commanded torques for regularization
 
     def _setup_scene(self):
         self.robot = Articulation(self.cfg.robot_cfg)
         self._contact_sensor = ContactSensor(self.cfg.contact_sensor)
+        self.scene.sensors["contact_sensor"] = self._contact_sensor
         # add ground plane
         self.cfg.terrain.num_envs = self.scene.cfg.num_envs
         self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing
@@ -121,6 +124,35 @@ class Rob6323Go2Env(DirectRLEnv):
 
     # def _apply_action(self) -> None:
     #     self.robot.set_joint_position_target(self._processed_actions)
+
+    # Part 2.3
+    def _pre_physics_step(self, actions: torch.Tensor) -> None:
+        self._actions = actions.clone()
+        # Compute desired joint positions from policy actions
+        self.desired_joint_pos = (
+            self.cfg.action_scale * self._actions 
+            + self.robot.data.default_joint_pos
+        )
+
+    def _apply_action(self) -> None:
+        # Compute PD torques
+        torques = torch.clip(
+            (
+                self.Kp * (
+                    self.desired_joint_pos 
+                    - self.robot.data.joint_pos 
+                )
+                - self.Kd * self.robot.data.joint_vel
+            ),
+            -self.torque_limits,
+            self.torque_limits,
+        )
+
+        # Apply torques to the robot
+        self.robot.set_joint_effort_target(torques)
+
+        # Record torques for regularization
+        self._torques = torques
 
     def _get_observations(self) -> dict:
         self._previous_actions = self._actions.clone()
@@ -171,7 +203,7 @@ class Rob6323Go2Env(DirectRLEnv):
         # 1. Penalize non-vertical orientation (projected gravity on XY plane)
         # Hint: We want the robot to stay upright, so gravity should only project onto Z.
         # Calculate the sum of squares of the X and Y components of projected_gravity_b.
-        gravity_x = self.robot.data.projected_gravity_b[:, 0]
+        gravity_x = self.robot.data.projected_gravity_b[:, 0] # Shape: (num_envs, 1)
         gravity_y = self.robot.data.projected_gravity_b[:, 1]
         rew_orient = torch.square(gravity_x) + torch.square(gravity_y)
         # 2. Penalize vertical velocity (z-component of base linear velocity)
@@ -182,18 +214,19 @@ class Rob6323Go2Env(DirectRLEnv):
         rew_dof_vel = torch.sum(torch.square(self.robot.data.joint_vel), dim=1)
         # 4. Penalize angular velocity in XY plane (roll/pitch)
         # Hint: Sum the squares of the X and Y components of the base angular velocity.
-        ang_vel_x = self.robot.data.root_ang_vel_b[:, 0]
+        ang_vel_x = self.robot.data.root_ang_vel_b[:, 0] # Shape: (num_envs, 1)
         ang_vel_y = self.robot.data.root_ang_vel_b[:, 1]
         rew_ang_vel_xy = torch.square(ang_vel_x) + torch.square(ang_vel_y)
 
         # Part 6.3
         # Foot clearance
-        rew_foot_clearance = self._reward_foot_clearance()
+        rew_feet_clearance = self._reward_feet_clearance()
         # Contact forces 
-        # Get the magnitude of contact forces per foot, then add the feet magnitudes together per env
-        magnitudes = torch.norm(self._contact_forces(), dim=-1)
-        rew_contact_forces = torch.sum(magnitudes, dim=-1)
+        rew_tracking_contacts_shaped_force = self._reward_tracking_contacts_shaped_force()
         
+        # Torque regularization
+        rew_torque_magnitude = torch.sum(torch.abs(self._torques), dim=1)
+
         rewards = {
             "track_lin_vel_xy_exp": lin_vel_error_mapped * self.cfg.lin_vel_reward_scale,
             "track_ang_vel_z_exp": yaw_rate_error_mapped * self.cfg.yaw_rate_reward_scale,
@@ -203,8 +236,9 @@ class Rob6323Go2Env(DirectRLEnv):
             "lin_vel_z": rew_lin_vel_z * self.cfg.lin_vel_z_reward_scale,
             "dof_vel": rew_dof_vel * self.cfg.dof_vel_reward_scale,
             "ang_vel_xy": rew_ang_vel_xy * self.cfg.ang_vel_xy_reward_scale,
-            "foot_clearance": rew_foot_clearance * self.cfg.feet_clearance_reward_scale, # Part 6.3
-            "contact_forces": rew_contact_forces * self.cfg.tracking_contacts_shaped_force_reward_scale
+            "feet_clearance": rew_feet_clearance * self.cfg.feet_clearance_reward_scale, # Part 6.3
+            "tracking_contacts_shaped_force": rew_tracking_contacts_shaped_force * self.cfg.tracking_contacts_shaped_force_reward_scale,
+            "torque_magnitude": rew_torque_magnitude * self.cfg.torque__magnitude_reward_scale
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
         # Logging
@@ -319,32 +353,6 @@ class Rob6323Go2Env(DirectRLEnv):
 
         return arrow_scale, arrow_quat
 
-    # Part 2.3
-    def _pre_physics_step(self, actions: torch.Tensor) -> None:
-        self._actions = actions.clone()
-        # Compute desired joint positions from policy actions
-        self.desired_joint_pos = (
-            self.cfg.action_scale * self._actions 
-            + self.robot.data.default_joint_pos
-        )
-
-    def _apply_action(self) -> None:
-        # Compute PD torques
-        torques = torch.clip(
-            (
-                self.Kp * (
-                    self.desired_joint_pos 
-                    - self.robot.data.joint_pos 
-                )
-                - self.Kd * self.robot.data.joint_vel
-            ),
-            -self.torque_limits,
-            self.torque_limits,
-        )
-
-        # Apply torques to the robot
-        self.robot.set_joint_effort_target(torques)
-        
     # Part 4.3
     @property
     def foot_positions_w(self) -> torch.Tensor:
@@ -413,7 +421,6 @@ class Rob6323Go2Env(DirectRLEnv):
         self.desired_contact_states[:, 2] = smoothing_multiplier_RL
         self.desired_contact_states[:, 3] = smoothing_multiplier_RR
 
-
     # Part 4.5
     def _reward_raibert_heuristic(self):
         cur_footsteps_translated = self.foot_positions_w - self.robot.data.root_pos_w.unsqueeze(1)
@@ -454,34 +461,30 @@ class Rob6323Go2Env(DirectRLEnv):
     # Get foot height
     @property
     def _foot_height(self):
+        """Returns the feet height in the world frame.
+        Shape: (num_envs, num_feet, 1)
+        """
         foot_positions_w = self.foot_positions_w
         heights = foot_positions_w[:, :, 2] # get the third coord (z)
         return heights
 
-    # Get reward based on distance from desired foot heights
-    def _reward_foot_clearance(self):
+    def _reward_feet_clearance(self):
+        phases = 1 - torch.abs(1.0 - torch.clip((self.foot_indices * 2.0) - 1.0, 0.0, 1.0) * 2.0)
 
-        durations = 0.5
-        foot_heights = self._foot_height
-    
-        # store desired foot clearance depending on phase
-        # lower limb length is reported to be 21 cm (0.21 m)
-        peak = 0.05
+        foot_height = self._foot_height
+        target_height = 0.08 * phases + 0.02 # offset for foot radius 2 cm
+        rew_foot_clearance = torch.square(target_height - foot_height) * (1 - self.desired_contact_states)
+        rew_feet_clearance = torch.sum(rew_foot_clearance, dim=1)
 
-        foot_clearance_indices = self.foot_indices.clone()
-        for idxs in foot_clearance_indices:
-            # use the indices after they're set up in the _step_contact_targets
-            stance_idxs = idxs < durations
-            swing_idxs = idxs > durations
-            # want the middle of the swing phase to be the peak height (0.21 m)
-            idxs[stance_idxs] = 0.0
-            # idxs[swing_idxs] = peak*torch.sin(2*np.pi*(idxs[swing_idxs]-durations))
-            idxs[swing_idxs] = peak
+        return rew_feet_clearance
 
-        reward = torch.sum(torch.square(foot_heights-foot_clearance_indices), dim=1)
+    def _reward_tracking_contacts_shaped_force(self):
+        foot_forces = torch.norm(self._contact_sensor.data.net_forces_w[:, self._feet_ids_sensor, :], dim=-1)
+        desired_contact = self.desired_contact_states
 
-        return reward
-
-    # Get contact force on feet
-    def _contact_forces(self):
-        return self._contact_sensor.data.net_forces_w[:, self._feet_ids_sensor]
+        rew_tracking_contacts_shaped_force = 0.
+        for i in range(4):
+            rew_tracking_contacts_shaped_force += - (1 - desired_contact[:, i]) * (
+                        1 - torch.exp(-1 * foot_forces[:, i] ** 2 / 100.))
+                        
+        return rew_tracking_contacts_shaped_force / 4
