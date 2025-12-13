@@ -47,6 +47,7 @@ class Rob6323Go2Env(DirectRLEnv):
                 "track_ang_vel_z_exp",
                 "rew_action_rate",     # <--- Added
                 "raibert_heuristic"    # <--- Added
+                
             ]
         }
         # Get specific body indices
@@ -149,6 +150,23 @@ class Rob6323Go2Env(DirectRLEnv):
         # Update the prev action hist (roll buffer and insert new action)
         self.last_actions = torch.roll(self.last_actions, 1, 2)
         self.last_actions[:, :, 0] = self._actions[:]
+        
+        # 1. Penalize non-vertical orientation (projected gravity on XY plane)
+        # Hint: We want the robot to stay upright, so gravity should only project onto Z.
+        # Calculate the sum of squares of the X and Y components of projected_gravity_b.
+        rew_orient = torch.sum(torch.square(self.robot.data.projected_gravity_b[:, :2]), dim=1)
+        # 2. Penalize vertical velocity (z-component of base linear velocity)
+        # Hint: Square the Z component of the base linear velocity.
+        rew_lin_vel_z = torch.square(self.robot.data.root_lin_vel_b[:, 2])
+
+        # 4. Penalize angular velocity in XY plane (roll/pitch)
+        # Hint: Sum the squares of the X and Y components of the base angular velocity.
+        rew_ang_vel_xy = torch.sum(torch.square(self.robot.data.joint_vel), dim=1)
+        
+        # 4. Penalize angular velocity in XY plane (roll/pitch)
+        # Hint: Sum the squares of the X and Y components of the base angular velocity.
+        rew_ang_vel_xy = torch.sum(torch.square(self.robot.data.root_ang_vel_b[:, :2]), dim=1)
+
 
         # Add to rewards dict
         rewards = {
