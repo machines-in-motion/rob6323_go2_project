@@ -56,6 +56,12 @@ class Rob6323Go2Env(DirectRLEnv):
         self._base_id, _ = self._contact_sensor.find_bodies("base")
         # self._feet_ids, _ = self._contact_sensor.find_bodies(".*foot")
         # self._undesired_contact_body_ids, _ = self._contact_sensor.find_bodies(".*thigh")
+        
+        # PD control parameters
+        self.Kp = torch.tensor([cfg.Kp] * 12, device=self.device).unsqueeze(0).repeat(self.num_envs, 1)
+        self.Kd = torch.tensor([cfg.Kd] * 12, device=self.device).unsqueeze(0).repeat(self.num_envs, 1)
+        self.motor_offsets = torch.zeros(self.num_envs, 12, device=self.device)
+        self.torque_limits = cfg.torque_limits
 
         # add handle for debug visualization (this is set to a valid handle inside set_debug_vis)
         self.set_debug_vis(self.cfg.debug_vis)
@@ -80,10 +86,28 @@ class Rob6323Go2Env(DirectRLEnv):
 
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
         self._actions = actions.clone()
-        self._processed_actions = self.cfg.action_scale * self._actions + self.robot.data.default_joint_pos
+        # Compute desired joint positions from policy actions
+        self.desired_joint_pos = (
+            self.cfg.action_scale * self._actions 
+            + self.robot.data.default_joint_pos
+        )
 
     def _apply_action(self) -> None:
-        self.robot.set_joint_position_target(self._processed_actions)
+        # Compute PD torques
+        torques = torch.clip(
+            (
+                self.Kp * (
+                    self.desired_joint_pos 
+                    - self.robot.data.joint_pos 
+                )
+                - self.Kd * self.robot.data.joint_vel
+            ),
+            -self.torque_limits,
+            self.torque_limits,
+        )
+
+        # Apply torques to the robot
+        self.robot.set_joint_effort_target(torques)
 
     def _get_observations(self) -> dict:
         self._previous_actions = self._actions.clone()
