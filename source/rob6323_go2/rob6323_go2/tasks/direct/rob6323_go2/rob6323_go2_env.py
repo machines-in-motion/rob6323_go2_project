@@ -285,7 +285,7 @@ class Rob6323Go2Env(DirectRLEnv):
         rew_foot_clearance = torch.square(target_height - foot_height) * (1 - self.desired_contact_states)
         rew_feet_clearance = torch.sum(rew_foot_clearance, dim=1) 
 
-        foot_forces = torch.norm(self.contact_forces[:, self.feet_indices, :], dim=-1)
+        foot_forces = torch.norm(self.net_contact_forces[:, self.feet_indices, :], dim=-1)
         desired_contact = self.desired_contact_states
         rew_tracking_contacts_shaped_force = 0.
         for i in range(4):
