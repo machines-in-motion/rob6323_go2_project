@@ -3,7 +3,6 @@
 **/build*/
 **/*.so
 **/*.log*
-
 # Omniverse
 **/*.dmp
 **/.thumbs
@@ -55,7 +54,7 @@ _build
 
 # RL-Games
 **/runs/*
-**/logs/*
+# **/logs/*
 **/recordings/*
 
 # Pre-Trained Checkpoints
