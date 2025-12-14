@@ -52,7 +52,13 @@ class Rob6323Go2Env(DirectRLEnv):
                 "track_lin_vel_xy_exp",
                 "track_ang_vel_z_exp",
                 "rew_action_rate",     # <--- Added
-                "raibert_heuristic"    # <--- Added
+                "raibert_heuristic",    # <--- Added
+                "orient",
+                "lin_vel_z",
+                "dof_vel",
+                "ang_vel_xy",
+                "feet_clearance",
+                "tracking_contacts_shaped_force"
             ]
         }
 
