@@ -22,7 +22,6 @@ import isaaclab.utils.math as math_utils
 
 from .rob6323_go2_env_cfg import Rob6323Go2EnvCfg
 
-# Test
 class Rob6323Go2Env(DirectRLEnv):
     cfg: Rob6323Go2EnvCfg
 
