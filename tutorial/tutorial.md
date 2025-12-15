@@ -92,6 +92,8 @@ First, disable the built-in PD controller in the config and define our custom ga
 
 ```python
 # In Rob6323Go2EnvCfg
+# add this import:
+from isaaclab.actuators import ImplicitActuatorCfg
 
 # PD control gains
 Kp = 20.0  # Proportional gain
