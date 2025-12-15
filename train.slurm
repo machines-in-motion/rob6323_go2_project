@@ -123,4 +123,4 @@ rsync -az --delete \
   --exclude='*.out' \
   -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null" \
   "${PERSISTENT_LOGS_DIR}/" \
-  "${REMOTE_HOST}:${REMOTE_PROJECT}/logs/part3${SLURM_JOB_ID}/"
+  "${REMOTE_HOST}:${REMOTE_PROJECT}/logs/part4${SLURM_JOB_ID}/"
