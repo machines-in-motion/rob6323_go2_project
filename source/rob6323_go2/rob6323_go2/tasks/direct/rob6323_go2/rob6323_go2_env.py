@@ -67,6 +67,9 @@ class Rob6323Go2Env(DirectRLEnv):
         self.last_actions = torch.zeros(self.num_envs, gym.spaces.flatdim(self.single_action_space), 3, dtype=torch.float, device=self.device, requires_grad=False)
         self.set_debug_vis(self.cfg.debug_vis)
         # PD control parameters
+        '''
+            creating a tensor of 12, one for each leg, having 3 joints, [thigh, hip, calf]
+        '''
         self.Kp = torch.tensor([cfg.Kp] * 12, device=self.device).unsqueeze(0).repeat(self.num_envs, 1)
         self.Kd = torch.tensor([cfg.Kd] * 12, device=self.device).unsqueeze(0).repeat(self.num_envs, 1)
         self.motor_offsets = torch.zeros(self.num_envs, 12, device=self.device)
@@ -164,6 +167,10 @@ class Rob6323Go2Env(DirectRLEnv):
         rew_tracking_contacts = self._reward_tracking_contacts_shaped_force()
         # action rate penalization
         # First derivative (Current - Last)
+        '''
+            Penalize high action rates by computing the squared difference between the current action and the last action.
+            Adding the first and second derivative gives smoother action transitions. 
+        '''
         rew_action_rate = torch.sum(torch.square(self._actions - self.last_actions[:, :, 0]), dim=1) * (self.cfg.action_scale ** 2)
         # Second derivative (Current - 2*Last + 2ndLast)
         rew_action_rate += torch.sum(torch.square(self._actions - 2 * self.last_actions[:, :, 0] + self.last_actions[:, :, 1]), dim=1) * (self.cfg.action_scale ** 2)
@@ -190,6 +197,11 @@ class Rob6323Go2Env(DirectRLEnv):
         
         
         # Logging
+        '''
+         The accumulated rewards for each component are stored . 
+         Each RL step has 1000 steps and we run a total of 16 such runs given that each env 
+         trains for full 1000 steps before termination. 
+        '''
         for key, value in rewards.items():
             self._episode_sums[key] += value
         return reward
@@ -199,8 +211,6 @@ class Rob6323Go2Env(DirectRLEnv):
         net_contact_forces = self._contact_sensor.data.net_forces_w_history
         cstr_termination_contacts = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self._base_id], dim=-1), dim=1)[0] > 1.0, dim=1)
         cstr_upsidedown = self.robot.data.projected_gravity_b[:, 2] > 0
-        died = cstr_termination_contacts | cstr_upsidedown
-        
         # PART3 terminate if base is too low
         base_height = self.robot.data.root_pos_w[:, 2]
         cstr_base_height_min = base_height < self.cfg.base_height_min

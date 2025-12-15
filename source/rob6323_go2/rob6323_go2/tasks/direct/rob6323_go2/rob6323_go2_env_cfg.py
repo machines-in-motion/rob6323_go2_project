@@ -39,6 +39,10 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     Kd = 0.5   # Derivative gain
     torque_limits = 100.0  # Max torque limits for the joints
     
+    # reward scales
+    lin_vel_reward_scale = 2.0
+    yaw_rate_reward_scale = 1.0
+    
     #PART3 : threshold for termination
     base_height_min = 0.20  # Terminate if base is lower than 20cm
     
@@ -109,13 +113,9 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     goal_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
     current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
 
-    # reward scales
-    lin_vel_reward_scale = 2.0
-    yaw_rate_reward_scale = 1.0
+    
     
     # "base_legs" is an arbitrary key we use to group these actuators
-    #why are we disabling implicit P and D gains? 
-    #Do we need to implement this later. 
     robot_cfg.actuators["base_legs"] = ImplicitActuatorCfg(
         joint_names_expr=[".*_hip_joint", ".*_thigh_joint", ".*_calf_joint"],
         effort_limit=23.5,
