@@ -35,8 +35,6 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     Kd = 0.5   # Derivative gain
     torque_limits = 100.0  # Max torque
     
-    # In Rob6323Go2EnvCfg
-    base_height_min = 0.20  # Terminate if base is lower than 20cm
     
 
     # simulation
