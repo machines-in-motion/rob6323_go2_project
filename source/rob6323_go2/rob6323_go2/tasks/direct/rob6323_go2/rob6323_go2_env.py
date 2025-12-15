@@ -19,6 +19,7 @@ from isaaclab.utils.math import sample_uniform
 from isaaclab.sensors import ContactSensor
 from isaaclab.markers import VisualizationMarkers
 import isaaclab.utils.math as math_utils
+import numpy as np
 
 from .rob6323_go2_env_cfg import Rob6323Go2EnvCfg
 
