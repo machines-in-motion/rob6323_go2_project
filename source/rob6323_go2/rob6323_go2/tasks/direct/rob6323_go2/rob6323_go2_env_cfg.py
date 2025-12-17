@@ -27,6 +27,9 @@ from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG
 from isaaclab.terrains import TerrainImporterCfg, TerrainGeneratorCfg
 from isaaclab.terrains.height_field import hf_terrains_cfg as terrain_gen
 
+#PART 4
+from isaaclab.actuators import ImplicitActuatorCfg
+
 @configclass
 class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     # env
@@ -39,8 +42,24 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     state_space = 0
     debug_vis = True
     
+    # PD control gains
+    Kp = 20.0  # Proportional gain
+    Kd = 0.5   # Derivative gain
+    torque_limits = 100.0  # Max torque
+    
     #base height 
     base_height_min = 0.15  # the bot is about 0.30m tall. From tutorials, giving a min of 0.15m . 
+    
+    #tunable reward scale
+    #part1
+    lin_vel_reward_scale = 1.0
+    yaw_rate_reward_scale = 0.5
+    action_rate_reward_scale = -0.1
+    
+    #part 4
+    raibert_heuristic_reward_scale = -10.0
+    feet_clearance_reward_scale = -30.0
+    tracking_contacts_shaped_force_reward_scale = 4.0
 
     # simulation
     sim: SimulationCfg = SimulationCfg(
@@ -119,5 +138,15 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
 
     # reward scales
-    lin_vel_reward_scale = 1.0
-    yaw_rate_reward_scale = 0.5
+
+    
+    # Update robot_cfg
+    robot_cfg: ArticulationCfg = UNITREE_GO2_CFG.replace(prim_path="/World/envs/env_.*/Robot")
+    # "base_legs" is an arbitrary key we use to group these actuators
+    robot_cfg.actuators["base_legs"] = ImplicitActuatorCfg(
+        joint_names_expr=[".*_hip_joint", ".*_thigh_joint", ".*_calf_joint"],
+        effort_limit=23.5,
+        velocity_limit=30.0,
+        stiffness=0.0,  # CRITICAL: Set to 0 to disable implicit P-gain
+        damping=0.0,    # CRITICAL: Set to 0 to disable implicit D-gain
+    )
