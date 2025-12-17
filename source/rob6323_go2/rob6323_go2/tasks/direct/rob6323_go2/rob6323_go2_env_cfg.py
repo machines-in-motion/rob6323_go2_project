@@ -23,7 +23,8 @@ from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
 from isaaclab.sim import SimulationCfg
-from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG 
+from isaaclab.terrains import TerrainImporterCfg, TerrainGeneratorCfg
+from isaaclab.terrains.height_field import hf_terrains_cfg as terrain_gen
 
 @configclass
 class Rob6323Go2EnvCfg(DirectRLEnvCfg):
@@ -67,11 +68,8 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
             curriculum=False,  # ← IMPORTANT: Disable curriculum to avoid duplicate spawns
             sub_terrains={
                 "random_rough": terrain_gen.HfRandomUniformTerrainCfg(
-                    proportion=1.0,
-                    amplitude_range=(0.05, 0.15),  # 5-15cm bumps
-                    num_waves=3,
-                    border_width=0.25,
-                ),
+            proportion=0.2, noise_range=(0.02, 0.10), noise_step=0.02, border_width=0.25
+        ),
             },
         ),
         collision_group=-1,
