@@ -61,7 +61,7 @@ class Rob6323Go2Env(DirectRLEnv):
         self.Kd = torch.tensor([cfg.Kd] * 12, device=self.device).unsqueeze(0).repeat(self.num_envs, 1)
         self.motor_offsets = torch.zeros(self.num_envs, 12, device=self.device)
         self.torque_limits = cfg.torque_limits
-        
+        self.torques = torch.zeros(self.num_envs, 12, device=self.device)
         # actuator friction model params
         self.friction_Fs = torch.zeros(self.num_envs, 12, device=self.device)
         self.friction_mu = torch.zeros(self.num_envs, 12, device=self.device)
