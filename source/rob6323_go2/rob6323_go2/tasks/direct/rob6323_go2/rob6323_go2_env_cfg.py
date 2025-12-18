@@ -93,3 +93,4 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     Kp = 20.0
     Kd = 0.5
     torque_limits = 100.0
+    base_height_min = 0.20
