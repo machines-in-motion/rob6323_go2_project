@@ -84,6 +84,7 @@ class Rob6323Go2Env(DirectRLEnv):
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
             for key in [
                 "track_lin_vel_xy_exp",
+                "track_lin_vel_proj",
                 "track_ang_vel_z_exp",
                 "rew_action_rate",
                 "raibert_heuristic",
@@ -197,8 +198,20 @@ class Rob6323Go2Env(DirectRLEnv):
         rew_ang_vel_xy = torch.sum(torch.square(self.robot.data.root_ang_vel_b[:, :2]), dim=1)
         rew_torque = torch.sum(torch.square(self._last_torques), dim=1)
 
+        # reward travel along the commanded planar velocity direction
+        cmd_xy = self._commands[:, :2]
+        cmd_xy_norm = torch.linalg.norm(cmd_xy, dim=1)
+        vel_xy = self.robot.data.root_lin_vel_b[:, :2]
+        vel_along_cmd = torch.sum(cmd_xy * vel_xy, dim=1)
+        rew_lin_vel_proj = torch.where(
+            cmd_xy_norm > 1e-3,
+            vel_along_cmd / (cmd_xy_norm + 1e-6),
+            torch.zeros_like(vel_along_cmd),
+        )
+
         rewards = {
             "track_lin_vel_xy_exp": lin_vel_error_mapped * self.cfg.lin_vel_reward_scale,
+            "track_lin_vel_proj": rew_lin_vel_proj * self.cfg.lin_vel_proj_reward_scale,
             "track_ang_vel_z_exp": yaw_rate_error_mapped * self.cfg.yaw_rate_reward_scale,
             "rew_action_rate": rew_action_rate * self.cfg.action_rate_reward_scale,
             "raibert_heuristic": rew_raibert_heuristic * self.cfg.raibert_heuristic_reward_scale,
