@@ -61,10 +61,14 @@ class Rob6323Go2Env(DirectRLEnv):
         self.Kd = torch.tensor([cfg.Kd] * 12, device=self.device).unsqueeze(0).repeat(self.num_envs, 1)
         self.motor_offsets = torch.zeros(self.num_envs, 12, device=self.device)
         self.torque_limits = cfg.torque_limits
-
+        
+        # actuator friction model params
+        self.friction_Fs = torch.zeros(self.num_envs, 12, device=self.device)
+        self.friction_mu = torch.zeros(self.num_envs, 12, device=self.device)
+        
         # X/Y linear velocity and yaw angular velocity commands
         self._commands = torch.zeros(self.num_envs, 3, device=self.device)
-
+        
         # Logging
         self._episode_sums = {
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
@@ -122,20 +126,21 @@ class Rob6323Go2Env(DirectRLEnv):
 
 
     def _apply_action(self) -> None:
-        # Compute PD torques
-        torques = torch.clip(
-            (
-                self.Kp * (
-                    self.desired_joint_pos 
-                    - self.robot.data.joint_pos 
-                )
-                - self.Kd * self.robot.data.joint_vel
-            ),
-            -self.torque_limits,
-            self.torque_limits,
-        )
         
-        # Apply torques to the robot
+        torques_pd = self.Kp * (self.desired_joint_pos - self.robot.data.joint_pos) - self.Kd * self.robot.data.joint_vel
+        #compute friction torques
+        joint_vel = self.robot.data.joint_vel
+        tau_stiction = self.friction_Fs * torch.tanh(joint_vel / 0.1)
+        tau_viscous = self.friction_mu * joint_vel
+        tau_friction = tau_stiction + tau_viscous
+        
+        #apply friction to PD out
+        torques = torques_pd - tau_friction
+        
+        #clip to torque lim
+        torques = torch.clip(torques, -self.torque_limits, self.torque_limits)
+        
+        #apply torques to the robot
         self.robot.set_joint_effort_target(torques)
 
     def _get_observations(self) -> dict:
@@ -244,6 +249,10 @@ class Rob6323Go2Env(DirectRLEnv):
         self.robot.reset(env_ids)
         
         self.gait_indices[env_ids] = 0
+        
+        # Randomized friction params reset
+        self.friction_Fs[env_ids] = torch.rand(len(env_ids), 12, device=self.device) * (self.cfg.friction_fs_max - self.cfg.friction_fs_min) + self.cfg.friction_fs_min
+        self.friction_mu[env_ids] = torch.rand(len(env_ids), 12, device=self.device) * (self.cfg.friction_mu_max - self.cfg.friction_mu_min) + self.cfg.friction_mu_min
         
         super()._reset_idx(env_ids)
         if len(env_ids) == self.num_envs:

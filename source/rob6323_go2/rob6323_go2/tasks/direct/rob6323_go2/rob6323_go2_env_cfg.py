@@ -34,6 +34,11 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     Kp = 20.0  # Proportional gain
     Kd = 0.5   # Derivative gain
     torque_limits = 100.0  # Max torque
+    # Actuator friction model params
+    friction_fs_min = 0.0
+    friction_fs_max = 2.5
+    friction_mu_min = 0.0
+    friction_mu_max = 0.3
     
     # In Rob6323Go2EnvCfg
     base_height_min = 0.05  # Terminate if base is lower than 20cm
@@ -43,6 +48,8 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     lin_vel_z_reward_scale = -0.02
     dof_vel_reward_scale = -0.0001
     ang_vel_xy_reward_scale = -0.001
+    
+    
     
     observation_space = 48 + 4  # Added 4 for clock inputs
 
