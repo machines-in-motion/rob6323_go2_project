@@ -151,7 +151,7 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     ang_vel_xy_reward_scale = -0.001
 
     # Foot slip penalty (horizontal slip while in contact)
-    feet_slip_reward_scale = -0.01
+    feet_slip_reward_scale = -0.05
 
     # Explicit knee/hip collision penalty
     knee_collision_reward_scale = -0.02
