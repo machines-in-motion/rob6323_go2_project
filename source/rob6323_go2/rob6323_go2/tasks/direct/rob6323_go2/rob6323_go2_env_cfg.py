@@ -13,11 +13,9 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.utils import configclass
 from isaaclab.terrains import TerrainImporterCfg
-from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
-from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG
+from isaaclab.sensors import ContactSensorCfg
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, FRAME_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG
-from isaaclab.actuators import ImplicitActuatorCfg
 
 @configclass
 class Rob6323Go2EnvCfg(DirectRLEnvCfg):
@@ -25,21 +23,11 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     decimation = 4
     episode_length_s = 20.0
     # - spaces definition
-    action_scale = 0.5
+    action_scale = 0.25
     action_space = 12
-    observation_space = 48 + 4  + 40 # Added 4 for clock inputs + For hight sensors 
-
-    raibert_heuristic_reward_scale = -2
-    feet_clearance_reward_scale = -0.2
-    tracking_contacts_shaped_force_reward_scale = 1.0
-    
+    observation_space = 48
     state_space = 0
     debug_vis = True
-    # PD control gains
-    Kp = 20  # Proportional gain
-    Kd = 0.50   # Derivative gain
-    torque_limits = 100.0  # Max torque
-    base_height_min = 0.05  # Terminate if base is lower than 20cm
 
     # simulation
     sim: SimulationCfg = SimulationCfg(
@@ -53,37 +41,6 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
             restitution=0.0,
         ),
     )
-
-    terrain = TerrainImporterCfg(
-        prim_path="/World/ground",
-        terrain_type="generator",
-        terrain_generator=ROUGH_TERRAINS_CFG,
-        max_init_terrain_level=0,
-        collision_group=-1,
-        physics_material=sim_utils.RigidBodyMaterialCfg(
-            friction_combine_mode="multiply",
-            restitution_combine_mode="multiply",
-            static_friction=1.0,
-            dynamic_friction=1.0,
-        ),
-        visual_material=sim_utils.MdlFileCfg(
-            mdl_path="{NVIDIA_NUCLEUS_DIR}/Materials/Base/Architecture/Shingles_01.mdl",
-            project_uvw=True,
-        ),
-        debug_vis=False,
-    )
-
-    # we add a height scanner for perceptive locomotion
-    height_scanner = RayCasterCfg(
-        prim_path="/World/envs/env_.*/Robot/base",
-        offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
-        ray_alignment="yaw",
-        pattern_cfg=patterns.GridPatternCfg(resolution=0.2, size=[1.6, 1.0]),
-        debug_vis=False,
-        mesh_prim_paths=["/World/ground"],
-    )
-
-    '''
     terrain = TerrainImporterCfg(
         prim_path="/World/ground",
         terrain_type="plane",
@@ -96,19 +53,9 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
             restitution=0.0,
         ),
         debug_vis=False,
-    ) 
-
-    '''
-    # Update robot_cfg
-    robot_cfg: ArticulationCfg = UNITREE_GO2_CFG.replace(prim_path="/World/envs/env_.*/Robot")
-    # "base_legs" is an arbitrary key we use to group these actuators
-    robot_cfg.actuators["base_legs"] = ImplicitActuatorCfg(
-        joint_names_expr=[".*_hip_joint", ".*_thigh_joint", ".*_calf_joint"],
-        effort_limit=23.5,
-        velocity_limit=30.0,
-        stiffness=0.0,  # CRITICAL: Set to 0 to disable implicit P-gain
-        damping=0.0,    # CRITICAL: Set to 0 to disable implicit D-gain
     )
+    # robot(s)
+    robot_cfg: ArticulationCfg = UNITREE_GO2_CFG.replace(prim_path="/World/envs/env_.*/Robot")
 
     # scene
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=4.0, replicate_physics=True)
@@ -129,12 +76,6 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     goal_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
     current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
 
+    # reward scales
     lin_vel_reward_scale = 1.0
     yaw_rate_reward_scale = 0.5
-    action_rate_reward_scale = -0.1
-
-    # Additional reward scales
-    orient_reward_scale = -5.0
-    lin_vel_z_reward_scale = -0.02
-    dof_vel_reward_scale = -0.0001
-    ang_vel_xy_reward_scale = -0.001
