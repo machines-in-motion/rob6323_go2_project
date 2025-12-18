@@ -197,6 +197,8 @@ class Rob6323Go2Env(DirectRLEnv):
         rew_feet_clearance = self._reward_feet_clearance()
         rew_tracking_contacts = self._reward_tracking_contacts_shaped_force()
         
+        rew_torque = torch.sum(torch.square(self.torques), dim=1)
+        
         # action rate penalization
         # First derivative (Current - Last)
         rew_action_rate = torch.sum(torch.square(self._actions - self.last_actions[:, :, 0]), dim=1) * (self.cfg.action_scale ** 2)
@@ -223,6 +225,7 @@ class Rob6323Go2Env(DirectRLEnv):
             "feet_clearance": rew_feet_clearance * self.cfg.feet_clearance_reward_scale,
             "tracking_contacts_shaped_force": rew_tracking_contacts * self.cfg.tracking_contacts_shaped_force_reward_scale,
             "friction_loss": friction_loss * -0.0001,
+            "torque": rew_torque * self.cfg.torque_reward_scale,
         }
         
         
@@ -237,11 +240,14 @@ class Rob6323Go2Env(DirectRLEnv):
         net_contact_forces = self._contact_sensor.data.net_forces_w_history
         cstr_termination_contacts = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self._base_id], dim=-1), dim=1)[0] > 1.0, dim=1)
         cstr_upsidedown = self.robot.data.projected_gravity_b[:, 2] > 0
-        # terminate if base is too low
+        
+        #base height check with grace period
         base_height = self.robot.data.root_pos_w[:, 2]
+        base_height_grace = self.episode_length_buf > int(0.5 / self.step_dt)
         cstr_base_height_min = base_height < self.cfg.base_height_min
-
-        # apply all terminations
+        cstr_base_height_min &= base_height_grace
+        
+        #apply all terminations
         died = cstr_termination_contacts | cstr_upsidedown | cstr_base_height_min
         return died, time_out
 

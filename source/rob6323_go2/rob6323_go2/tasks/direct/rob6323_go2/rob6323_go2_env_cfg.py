@@ -49,6 +49,7 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     dof_vel_reward_scale = -0.0001
     ang_vel_xy_reward_scale = -0.001
     
+    torque_reward_scale = -0.0001  # Reward scale for torque penalty
     
     
     observation_space = 48 + 4  # Added 4 for clock inputs
