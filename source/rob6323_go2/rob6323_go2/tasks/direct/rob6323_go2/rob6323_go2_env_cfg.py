@@ -21,7 +21,7 @@ from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
 
 
 @configclass
-class Rob6323Go2RoughEnvCfg(DirectRLEnvCfg):
+class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     #env # - spaces definition
     decimation = 4
     episode_length_s = 20.0
