@@ -180,11 +180,11 @@ class Rob6323Go2Env(DirectRLEnv):
         height_above_terrain = base_height_world - terrain_height
         cstr_base_height_min = height_above_terrain < self.cfg.base_height_min
         died = cstr_termination_contacts | cstr_upsidedown 
-        if died :
+        if died.any() :
             print("Robot died due to contact or upside down!")
-            if cstr_termination_contacts:
+            if cstr_termination_contacts.any():
                 print(" - Contact force constraint violated.")
-            if cstr_upsidedown:
+            if cstr_upsidedown.any():
                 print(" - Robot is upside down.")
         return died, time_out
 
