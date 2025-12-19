@@ -93,10 +93,8 @@ class Rob6323Go2Env(DirectRLEnv):
 
     def _setup_scene(self):
         self.robot = Articulation(self.cfg.robot_cfg)
-        # add articulation to scene
-        self.scene.articulations["robot"] = self.robot
+        
         self._contact_sensor = ContactSensor(self.cfg.contact_sensor)
-        self.scene.sensors["contact_sensor"] = self._contact_sensor
         #height sensor for perceiving terrain height
         self._height_scanner = RayCaster(self.cfg.height_scanner)
         self.scene.sensors["height_scanner"] = self._height_scanner
@@ -110,7 +108,8 @@ class Rob6323Go2Env(DirectRLEnv):
         # we need to explicitly filter collisions for CPU simulation
         if self.device == "cpu":
             self.scene.filter_collisions(global_prim_paths=[])
-        
+        # add articulation to scene
+        self.scene.articulations["robot"] = self.robot
         # add lights
         light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
@@ -230,7 +229,7 @@ class Rob6323Go2Env(DirectRLEnv):
         terrain_height = self._terrain.env_origins[:, 2]
         height_above_terrain = base_height_world - terrain_height
         cstr_base_height_min = height_above_terrain < self.cfg.base_height_min
-        died = cstr_termination_contacts | cstr_upsidedown 
+        died = cstr_termination_contacts | cstr_upsidedown | cstr_base_height_min
         if died.any() :
             print("Robot died due to contact or upside down!")
             if cstr_termination_contacts.any():
