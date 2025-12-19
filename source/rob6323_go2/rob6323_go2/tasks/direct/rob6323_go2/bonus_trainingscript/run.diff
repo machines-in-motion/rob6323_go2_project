@@ -1,0 +1,98 @@
+--- git status ---
+On branch master
+Your branch is up to date with 'origin/master'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   scripts/rsl_rl/__pycache__/cli_args.cpython-311.pyc
+	modified:   source/rob6323_go2/rob6323_go2/tasks/direct/rob6323_go2/rob6323_go2_env.py
+	modified:   source/rob6323_go2/rob6323_go2/tasks/direct/rob6323_go2/rob6323_go2_env_cfg.py
+
+no changes added to commit (use "git add" and/or "git commit -a") 
+
+
+--- git diff ---
+diff --git a/scripts/rsl_rl/__pycache__/cli_args.cpython-311.pyc b/scripts/rsl_rl/__pycache__/cli_args.cpython-311.pyc
+index cfe10a7..b17e104 100644
+Binary files a/scripts/rsl_rl/__pycache__/cli_args.cpython-311.pyc and b/scripts/rsl_rl/__pycache__/cli_args.cpython-311.pyc differ
+diff --git a/source/rob6323_go2/rob6323_go2/tasks/direct/rob6323_go2/rob6323_go2_env.py b/source/rob6323_go2/rob6323_go2/tasks/direct/rob6323_go2/rob6323_go2_env.py
+index 651396a..f4a3dcc 100644
+--- a/source/rob6323_go2/rob6323_go2/tasks/direct/rob6323_go2/rob6323_go2_env.py
++++ b/source/rob6323_go2/rob6323_go2/tasks/direct/rob6323_go2/rob6323_go2_env.py
+@@ -85,6 +85,11 @@ class Rob6323Go2Env(DirectRLEnv):
+         self.desired_joint_pos = torch.zeros(self.num_envs, action_dim, device=self.device)
+         self.last_torques = torch.zeros(self.num_envs, action_dim, device=self.device)
+ 
++        # ---- actuator friction parameters (randomized per episode) ----
++        # Scalars per-environment, broadcast across joints
++        self._mu_v = torch.zeros(self.num_envs, 1, device=self.device)  # viscous coeff
++        self._F_s = torch.zeros(self.num_envs, 1, device=self.device)   # stiction coeff
++
+         # body indices
+         self._base_id, _ = self._contact_sensor.find_bodies("base")
+ 
+@@ -175,15 +180,23 @@ class Rob6323Go2Env(DirectRLEnv):
+         )
+ 
+     def _apply_action(self) -> None:
+-        # PD torque control with clipping
+-        self.last_torques = torch.clip(
+-            self.Kp * (self.desired_joint_pos - self.robot.data.joint_pos)
+-            - self.Kd * self.robot.data.joint_vel,
+-            -self.torque_limits,
+-            self.torque_limits,
+-        )
++        # PD torque control + simple actuator friction model (stiction + viscous)
++        # tau_friction = F_s * tanh(qd/0.1) + mu_v * qd
++        # tau_cmd = tau_PD - tau_friction
++        qd = self.robot.data.joint_vel  # (num_envs, action_dim)
++
++        tau_pd = self.Kp * (self.desired_joint_pos - self.robot.data.joint_pos) - self.Kd * qd
++
++        # broadcast per-env coefficients across joints
++        tau_stiction = self._F_s * torch.tanh(qd / 0.1)
++        tau_viscous = self._mu_v * qd
++        tau_cmd = tau_pd - (tau_stiction + tau_viscous)
++
++        # clip to limits and send to robot
++        self.last_torques = torch.clip(tau_cmd, -self.torque_limits, self.torque_limits)
+         self.robot.set_joint_effort_target(self.last_torques)
+ 
++
+     def _get_observations(self) -> dict:
+         self._previous_actions = self._actions.clone()
+ 
+diff --git a/source/rob6323_go2/rob6323_go2/tasks/direct/rob6323_go2/rob6323_go2_env_cfg.py b/source/rob6323_go2/rob6323_go2/tasks/direct/rob6323_go2/rob6323_go2_env_cfg.py
+index 904561f..cc124c2 100644
+--- a/source/rob6323_go2/rob6323_go2/tasks/direct/rob6323_go2/rob6323_go2_env_cfg.py
++++ b/source/rob6323_go2/rob6323_go2/tasks/direct/rob6323_go2/rob6323_go2_env_cfg.py
+@@ -44,6 +44,10 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
+     Kd = 0.5
+     torque_limits = 100.0
+ 
++    # Actuator friction randomization ranges (sampled per-episode, per-env)
++    actuator_viscous_range = (0.0, 0.3)   # mu_v ~ U(0, 0.3)
++    actuator_stiction_range = (0.0, 2.5)  # F_s ~ U(0, 2.5)
++
+     # Early termination based on base height
+     base_height_min = 0.20
+ 
+@@ -133,7 +137,7 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
+     # ------------------------------------------------------------------
+     # Command tracking
+     lin_vel_reward_scale = 2.0            # vx, vy tracking
+-    yaw_rate_reward_scale = 1           # yaw‑rate tracking
++    yaw_rate_reward_scale = 1          # yaw‑rate tracking
+ 
+     # Action regularization / smoothness
+     action_rate_reward_scale = -0.1      # penalize jerk in actions
+@@ -147,7 +151,7 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
+     # Base stability, attitude and height shaping
+     orient_reward_scale = -5.0
+     lin_vel_z_reward_scale = -0.02
+-    dof_vel_reward_scale = -0.005
++    dof_vel_reward_scale = -0.0005
+     ang_vel_xy_reward_scale = -0.005
+ 
+     # Foot slip penalty (horizontal slip while in contact)
