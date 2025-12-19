@@ -265,18 +265,18 @@ class Rob6323Go2RoughEnv(DirectRLEnv):
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
         time_out = self.episode_length_buf >= self.max_episode_length - 1
         net_contact_forces = self._contact_sensor.data.net_forces_w_history
-        cstr_termination_contacts = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self._base_id], dim=-1), dim=1)[0] > 1.0, dim=1)
+        cstr_termination_contacts = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self._base_id], dim=-1), dim=1)[0] > 10.0, dim=1)
         cstr_upsidedown = self.robot.data.projected_gravity_b[:, 2] > 0
 
         # base height check (relative to terrain)
-        base_height = torch.min(self._height_scanner.data.ray_hits_w[..., -1].item())
+        base_height = self._height_scanner.data.pos_w[:, 2] - torch.mean(self._height_scanner.data.ray_hits_w[..., 2], dim=1)
         # allow a short grace period after reset
         base_height_grace = self.episode_length_buf > int(0.5 / self.step_dt)
         cstr_base_height_min = base_height < self.cfg.base_height_min
         cstr_base_height_min &= base_height_grace
 
         #remove base height termination for rough terrain
-        died = cstr_upsidedown | cstr_base_height_min 
+        died = cstr_upsidedown | cstr_base_height_min | cstr_termination_contacts
         return died, time_out
 
     def _reset_idx(self, env_ids: Sequence[int] | None):
