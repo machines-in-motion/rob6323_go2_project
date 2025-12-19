@@ -273,6 +273,7 @@ class Rob6323Go2Env(DirectRLEnv):
                     self._commands,
                     self.robot.data.joint_pos - self.robot.data.default_joint_pos,
                     self.robot.data.joint_vel,
+                    height_data,
                     self._actions,
                     self.clock_inputs,
                 )
