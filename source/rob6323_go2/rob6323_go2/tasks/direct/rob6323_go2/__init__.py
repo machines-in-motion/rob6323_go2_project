@@ -11,7 +11,6 @@ from . import agents
 # Register Gym environments.
 ##
 
-
 gym.register(
     id="Template-Rob6323-Go2-Direct-v0",
     entry_point=f"{__name__}.rob6323_go2_env:Rob6323Go2RoughEnv",
