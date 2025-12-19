@@ -24,7 +24,7 @@ from isaaclab.assets import Articulation
 from isaaclab.envs import DirectRLEnv
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils.math import sample_uniform
-from isaaclab.sensors import ContactSensor
+from isaaclab.sensors import ContactSensor, RayCaster
 from isaaclab.markers import VisualizationMarkers
 import isaaclab.utils.math as math_utils
 
@@ -262,7 +262,7 @@ class Rob6323Go2Env(DirectRLEnv):
                 self._height_scanner.data.pos_w[:, 2].unsqueeze(1) - self._height_scanner.data.ray_hits_w[..., 2] - 0.5
             ).clip(-1.0, 1.0)
 
-        #print("Height Data is ",height_data.shape)
+        #print("Height Data is ",height_data.shape, self._height_scanner.data.pos)
         obs = torch.cat(
             [
                 tensor

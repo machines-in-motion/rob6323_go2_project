@@ -28,7 +28,7 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     # - spaces definition
     action_scale = 0.25
     action_space = 12
-    observation_space = 48 + 160 ## 160 for height data. 
+    observation_space = 48 + 4+ 160 ## 160 for height data.  Clock inputs too. 
     state_space = 0
     debug_vis = True
 
