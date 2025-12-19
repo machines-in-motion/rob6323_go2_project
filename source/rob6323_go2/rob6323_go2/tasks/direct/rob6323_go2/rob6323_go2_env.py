@@ -20,6 +20,9 @@ from isaaclab.sensors import ContactSensor
 from isaaclab.markers import VisualizationMarkers
 import isaaclab.utils.math as math_utils
 
+
+from isaaclab.sensors import ContactSensor, RayCaster
+
 from .rob6323_go2_env_cfg import Rob6323Go2EnvCfg
 
 
@@ -61,6 +64,12 @@ class Rob6323Go2Env(DirectRLEnv):
         self.cfg.terrain.num_envs = self.scene.cfg.num_envs
         self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing
         self._terrain = self.cfg.terrain.class_type(self.cfg.terrain)
+        # hEIGHT SENSOR 
+
+        self._height_scanner = RayCaster(self.cfg.height_scanner)
+        self.scene.sensors["height_scanner"] = self._height_scanner
+        
+        
         # clone and replicate
         self.scene.clone_environments(copy_from_source=False)
         # we need to explicitly filter collisions for CPU simulation
@@ -80,6 +89,9 @@ class Rob6323Go2Env(DirectRLEnv):
         self.robot.set_joint_position_target(self._processed_actions)
 
     def _get_observations(self) -> dict:
+        height_data = (
+                self._height_scanner.data.pos_w[:, 2].unsqueeze(1) - self._height_scanner.data.ray_hits_w[..., 2] - 0.5
+            ).clip(-1.0, 1.0)
         self._previous_actions = self._actions.clone()
         obs = torch.cat(
             [
@@ -90,6 +102,7 @@ class Rob6323Go2Env(DirectRLEnv):
                     self.robot.data.projected_gravity_b,
                     self._commands,
                     self.robot.data.joint_pos - self.robot.data.default_joint_pos,
+                    height_data,
                     self.robot.data.joint_vel,
                     self._actions,
                 )
