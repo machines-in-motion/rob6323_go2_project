@@ -330,7 +330,7 @@ class Rob6323Go2Env(DirectRLEnv):
         # Target height: 8cm max clearance at swing apex + 2cm foot radius offset
 
         rand_offset = 0.05 * torch.rand(self.num_envs, 1, device=self.device)
-        target_height = 0.08 * phases + 0.02 + rand_offset## Temporarily adding some extra height so that rough terrain can be cleared . No height data will be used as of now 
+        target_height = 0.08 * phases + 0.02 # Removred it for once  rand_offset## Temporarily adding some extra height so that rough terrain can be cleared . No height data will be used as of now 
         
         
         # Penalize deviation from target, only during swing (when desired_contact_states is 0)
@@ -353,14 +353,14 @@ class Rob6323Go2Env(DirectRLEnv):
         rewards = {
             "track_lin_vel_xy_exp": lin_vel_error_mapped * self.cfg.lin_vel_reward_scale, # Part 1
             "track_ang_vel_z_exp": yaw_rate_error_mapped * self.cfg.yaw_rate_reward_scale, # Part 1
-            "rew_action_rate": rew_action_rate * self.cfg.action_rate_reward_scale, # Part 1
-            "raibert_heuristic": rew_raibert_heuristic * self.cfg.raibert_heuristic_reward_scale,
-            "orient": rew_orient * self.cfg.orient_reward_scale,
-            "lin_vel_z": rew_lin_vel_z * self.cfg.lin_vel_z_reward_scale,
-            "dof_vel": rew_dof_vel * self.cfg.dof_vel_reward_scale,
-            "ang_vel_xy": rew_ang_vel_xy * self.cfg.ang_vel_xy_reward_scale,
-            "feet_clearance": rew_feet_clearance * self.cfg.feet_clearance_reward_scale,
-            "tracking_contacts_shaped_force": rew_tracking_contacts_shaped_force * self.cfg.tracking_contacts_shaped_force_reward_scale,
+            #"rew_action_rate": rew_action_rate * self.cfg.action_rate_reward_scale, # Part 1
+            #"raibert_heuristic": rew_raibert_heuristic * self.cfg.raibert_heuristic_reward_scale,
+            #"orient": rew_orient * self.cfg.orient_reward_scale,
+            #"lin_vel_z": rew_lin_vel_z * self.cfg.lin_vel_z_reward_scale,
+            #"dof_vel": rew_dof_vel * self.cfg.dof_vel_reward_scale,
+            #"ang_vel_xy": rew_ang_vel_xy * self.cfg.ang_vel_xy_reward_scale,
+            #"feet_clearance": rew_feet_clearance * self.cfg.feet_clearance_reward_scale,
+            #"tracking_contacts_shaped_force": rew_tracking_contacts_shaped_force * self.cfg.tracking_contacts_shaped_force_reward_scale,
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
         # Logging
@@ -371,7 +371,7 @@ class Rob6323Go2Env(DirectRLEnv):
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
         time_out = self.episode_length_buf >= self.max_episode_length - 1
         net_contact_forces = self._contact_sensor.data.net_forces_w_history
-        cstr_termination_contacts = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self._base_id], dim=-1), dim=1)[0] > 1.0, dim=1)
+        cstr_termination_contacts = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self._base_id], dim=-1), dim=1)[0] > 100.0, dim=1)  ## Changed it for more jerky action 
         cstr_upsidedown = self.robot.data.projected_gravity_b[:, 2] > 0
         # terminate if base is too low
         base_height = self.robot.data.root_pos_w[:, 2]
