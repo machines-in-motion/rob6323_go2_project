@@ -1,5 +1,4 @@
 # ROB6323 Go2 Project — Isaac Lab
-# TESTing
 
 This repository is the starter code for the NYU Reinforcement Learning and Optimal Control project in which students train a Unitree Go2 walking policy in Isaac Lab starting from a minimal baseline and improve it via reward shaping and robustness strategies. Please read this README fully before starting and follow the exact workflow and naming rules below to ensure your runs integrate correctly with the cluster scripts and grading pipeline.
 
@@ -165,4 +164,45 @@ The suggested way to inspect these logs is via the Open OnDemand web interface:
     - [ContactSensorData (`_contact_sensor.data`)](https://isaac-sim.github.io/IsaacLab/main/source/api/lab/isaaclab.sensors.html#isaaclab.sensors.ContactSensorData) — Contains `net_forces_w` (contact forces).
 
 ---
-Students should only edit README.md below this line.
+## Project Implementation 
+
+The summary of the changes implemented in the environment and configuration files, corresponding to the steps in the advanced locomotion tutorial.
+
+### Part 1: Action Rate Penalties (State History)
+To ensure smooth motion and prevent high-frequency oscillations, we implemented an action history buffer and associated penalties.
+- **Configuration:** Added `action_rate_reward_scale` (-0.15) to `Rob6323Go2EnvCfg`.
+- **State History:** Implemented a rolling history buffer `self.last_actions` in `Rob6323Go2Env` to store the last 3 actions.
+- **Reward Logic:** Added calculation for the first derivative (velocity) and second derivative (acceleration) of the actions in `_get_rewards` to penalize jerky control inputs.
+
+### Part 2: Low-Level PD Controller
+we replaced the simulator's implicit PD controller with a custom manual implementation to allow for precise torque-level control.
+- **Actuator Config:** Modified `robot_cfg.actuators["base_legs"]` to use `ImplicitActuatorCfg` with `stiffness=0.0` and `damping=0.0`, effectively disabling the physics engine's implicit control.
+- **Gains:** Defined custom `Kp` (20.0) and `Kd` (0.5) gains and torque limits (100.0) in the configuration.
+- **Control Loop:** Implemented the PD control law $\tau = K_p (q_{des} - q) - K_d \dot{q}$ manually within the `_apply_action` method in `rob6323_go2_env.py`.
+
+### Part 3: Early Stopping (Min Base Height)
+To improve training efficiency and enforce stability, we added a termination criterion based on the robot's height.
+- **Threshold:** Defined `base_height_min = 0.20` in the environment configuration.
+- **Logic:** Updated `_get_dones` to terminate the episode if the robot's base height ($z$-coordinate) falls below the 20cm threshold.
+
+### Part 4: Raibert Heuristic (Gait Shaping)
+We implemented the Raibert Heuristic to guide foot placement and stabilize velocity.
+- **Observations:** Expanded the observation space to `48 + 4` to include clock inputs representing the gait phase.
+- **Gait Logic:** Added `_step_contact_targets` to manage gait indices, Von Mises smoothing, and clock inputs.
+- **Heuristic Reward:** Implemented `_reward_raibert_heuristic` to calculate the error between the actual foot positions and the desired positions calculated via the Raibert offset (based on velocity commands).
+
+### Part 5: Refining the Reward Function
+To encourage natural and stable walking behaviors, we added several shaping terms to the reward function:
+- **Orientation:** Penalizes non-flat body orientation using projected gravity (`orient_reward_scale = -5.0`).
+- **Vertical Velocity:** Penalizes vertical movement (bouncing) of the base (`lin_vel_z_reward_scale = -0.1`).
+- **Joint Velocities:** Penalizes excessive joint speeds to encourage efficiency (`dof_vel_reward_scale = -0.0001`).
+- **Angular Velocity (XY):** Penalizes rolling and pitching (`ang_vel_xy_reward_scale = -0.001`).
+
+### Part 6: Advanced Foot Interaction
+We implemented advanced rewards to manage foot clearance and contact forces, ensuring the robot lifts its feet during swing and maintains contact during stance.
+- **Sensor Indexing:** Distinguished between kinematic body IDs (`self._feet_ids`) and sensor body IDs (`self._feet_ids_sensor`) to correctly access contact force data.
+- **Foot Clearance:** Added `rew_feet_clearance` to penalize feet that do not reach the target swing height (8cm + offset) during the swing phase.
+- **Shaped Contact Forces:** Added `rew_tracking_contacts_shaped_force` to penalize any ground contact forces occurring during the swing phase, using the `desired_contact_states` as a mask.
+
+### Extra Credit / Robustness
+- **Friction Randomization:** To improve sim-to-real robustness, we implemented randomization for joint friction. In `_reset_idx`, `fs_stiction` and `mu_viscous` are sampled from a uniform distribution and applied as a retarding torque in `_apply_action`.
