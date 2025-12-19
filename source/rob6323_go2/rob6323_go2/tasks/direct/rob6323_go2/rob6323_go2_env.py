@@ -16,7 +16,7 @@ from isaaclab.assets import Articulation
 from isaaclab.envs import DirectRLEnv
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils.math import sample_uniform
-from isaaclab.sensors import ContactSensor
+from isaaclab.sensors import ContactSensor , RayCaster
 from isaaclab.markers import VisualizationMarkers
 import isaaclab.utils.math as math_utils
 import numpy as np
@@ -69,6 +69,7 @@ class Rob6323Go2Env(DirectRLEnv):
         # X/Y linear velocity and yaw angular velocity commands
         self._commands = torch.zeros(self.num_envs, 3, device=self.device)
         
+        
         # Logging
         self._episode_sums = {
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
@@ -103,6 +104,9 @@ class Rob6323Go2Env(DirectRLEnv):
         self.robot = Articulation(self.cfg.robot_cfg)
         self._contact_sensor = ContactSensor(self.cfg.contact_sensor)
         self.scene.sensors["contact_sensor"] = self._contact_sensor
+        #height scanner
+        self._height_scanner = RayCaster(self.cfg.height_scanner)
+        self.scene.sensors["height_scanner"] = self._height_scanner
         # add ground plane
         self.cfg.terrain.num_envs = self.scene.cfg.num_envs
         self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing
@@ -152,6 +156,10 @@ class Rob6323Go2Env(DirectRLEnv):
 
     def _get_observations(self) -> dict:
         self._previous_actions = self._actions.clone()
+        heights = (
+            self._height_scanner.data.pos_w[:, 2].unsqueeze(1)  
+            - self._height_scanner.data.ray_hits_w[..., 2] 
+            - 0.5).clip(-1.0, 1.0) 
         obs = torch.cat(
             [
                 tensor
@@ -163,7 +171,8 @@ class Rob6323Go2Env(DirectRLEnv):
                     self.robot.data.joint_pos - self.robot.data.default_joint_pos,
                     self.robot.data.joint_vel,
                     self._actions,
-                    self.clock_inputs
+                    self.clock_inputs,
+                    heights.view(self.num_envs, -1),
                 )
                 if tensor is not None
             ],
