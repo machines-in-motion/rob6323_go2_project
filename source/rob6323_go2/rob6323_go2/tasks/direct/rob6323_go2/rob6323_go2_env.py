@@ -156,8 +156,8 @@ class Rob6323Go2Env(DirectRLEnv):
         self._step_contact_targets()
         rew_raibert_heuristic = self._reward_raibert_heuristic()
         rewards = {
-            "track_lin_vel_xy_exp": lin_vel_error_mapped * self.cfg.lin_vel_reward_scale * self.step_dt,
-            "track_ang_vel_z_exp": yaw_rate_error_mapped * self.cfg.yaw_rate_reward_scale * self.step_dt,
+            "track_lin_vel_xy_exp": lin_vel_error_mapped * self.cfg.lin_vel_reward_scale ,
+            "track_ang_vel_z_exp": yaw_rate_error_mapped * self.cfg.yaw_rate_reward_scale ,
             "rew_action_rate": rew_action_rate * self.cfg.action_rate_reward_scale,
             "raibert_heuristic": rew_raibert_heuristic * self.cfg.raibert_heuristic_reward_scale,
 
@@ -180,6 +180,12 @@ class Rob6323Go2Env(DirectRLEnv):
         height_above_terrain = base_height_world - terrain_height
         cstr_base_height_min = height_above_terrain < self.cfg.base_height_min
         died = cstr_termination_contacts | cstr_upsidedown 
+        if died :
+            print("Robot died due to contact or upside down!")
+            if cstr_termination_contacts:
+                print(" - Contact force constraint violated.")
+            if cstr_upsidedown:
+                print(" - Robot is upside down.")
         return died, time_out
 
     def _reset_idx(self, env_ids: Sequence[int] | None):
