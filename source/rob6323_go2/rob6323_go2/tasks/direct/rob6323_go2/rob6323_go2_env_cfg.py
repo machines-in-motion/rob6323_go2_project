@@ -34,6 +34,8 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     Kp = 20.0  # Proportional gain
     Kd = 0.5   # Derivative gain
     torque_limits = 100.0  # Max torque
+    
+    
     # Actuator friction model params
     friction_fs_min = 0.0
     friction_fs_max = 2.5
@@ -43,21 +45,24 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     # In Rob6323Go2EnvCfg
     base_height_min = 0.05  # Terminate if base is lower than 5cm
     
+    # reward scales
+    lin_vel_reward_scale = 1.0
+    yaw_rate_reward_scale = 0.5
+    action_rate_reward_scale = -0.1
+    
     # Part 5 - Additional reward scales
     orient_reward_scale = -5.0
     lin_vel_z_reward_scale = -0.02
     dof_vel_reward_scale = -0.0001
     ang_vel_xy_reward_scale = -0.001
-    
     torque_reward_scale = -0.0001  # Reward scale for torque penalty
-    
-    
-    observation_space = 48 + 4  # Added 4 for clock inputs
-
     raibert_heuristic_reward_scale = -10.0
     feet_clearance_reward_scale = -30.0
     tracking_contacts_shaped_force_reward_scale = 4.0
 
+    observation_space = 48 + 4  # Added 4 for clock inputs
+    
+    
     # simulation
     sim: SimulationCfg = SimulationCfg(
         dt=1 / 200,
@@ -114,8 +119,3 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     goal_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
     current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
 
-    # reward scales
-    lin_vel_reward_scale = 1.0
-    yaw_rate_reward_scale = 0.5
-    
-    action_rate_reward_scale = -0.1
