@@ -391,7 +391,7 @@ class Rob6323Go2Env(DirectRLEnv):
     # PART 4 In Rob6323Go2Env (add new method)
     # Defines contact plan
     def _step_contact_targets(self):
-        frequencies = 2.
+        frequencies = 3.
         phases = 0.5
         offsets = 0.
         bounds = 0.
